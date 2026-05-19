@@ -41,9 +41,24 @@ def jaccard_similarity(a, b):
 
 
 # 1. Load a pretrained Sentence Transformer model
-model = SentenceTransformer("BAAI/bge-large-en-v1.5", similarity_fn_name=SimilarityFunction.EUCLIDEAN)
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", similarity_fn_name=SimilarityFunction.EUCLIDEAN)
 
 tipsheets = [
+        TipSheet(
+            "California Assembly Judiciary Committee Approves Bill Protecting Homeowners' Right to Cooling Systems",
+            ["Housing", "Budget", "Enviornment", "Judiciary", "Utilities"],
+            "AB 1684 makes it unlawful for homeowners associations (HOAs) and other common‑interest development rules or deed restrictions to prohibit or unreasonably limit a homeowner from installing, upgrading, replacing, or using a cooling system in their own unit or lot. \"Cooling system\" can include window or portable air conditioners, evaporative (swamp) coolers, fans, heat pumps, and similar technologies, so long as they meet applicable state and local building, health, and safety rules. The bill also stops associations from charging fees, forcing homeowners to use a specific product or contractor, or claiming rebates or commissions related to a homeowner’s cooling system. Exceptions apply if the installation would violate law or if a required permit is denied. Associations may still require homeowners to repair any damage to common areas or other homes caused by the cooling system. If an association willfully violates the law, the homeowner can recover actual damages, a civil penalty (up to $2,000), and reasonable attorneys’ fees and court costs."
+            ),
+        TipSheet(
+            "California Assembly Approves Santa Fe Springs Municipal Water Utility Sale Bill",
+            ["Los Angeles", "Housing", "Finance", "Taxations", "Judiciary", "Economy", "Utilities", "Water"],
+            "This bill lets the City of Santa Fe Springs, until January 1, 2032, sell its municipal water utility to another public water system to consolidate service, but only under strict conditions designed to protect customers and the public. The sale would require a four‑fifths vote of the City Council and cannot be for less than fair market value. It can only proceed if the city’s water supply is contaminated or otherwise unsafe, or the city lacks the technical, managerial, or financial ability to treat or replace the supply, or if continuing to operate would create an unreasonable cost for ratepayers — with those facts supported by an independent financial analysis (per Proposition 218). The acquiring system must border the current service area, the consolidation must be economically feasible for customers of the selling system, service must continue without interruption or loss of quality, and customers must be told the first‑year post‑consolidation rate (with any future increases phased in). The city must give public notice, allow 45 days for written and oral protests, and consider them; if at least 10% of “interested persons” (residents or nonresident ratepayers) protest, the city must hold an election and the sale needs a majority vote of those voting, and if 50% or more protest the sale is halted for one year. The bill also states the Legislature’s finding that this special rule is needed for Santa Fe Springs. "
+            ),
+        TipSheet(
+                "California Senate Committee Advances Bill Requiring Water Suppliers' Wildfire Response Plans",
+                ["Public Safety", "Utilities", "Water"],
+                "SB 1153 requires urban retail water suppliers that serve areas designated as high or very high fire hazard zones to add wildfire-specific procedures to their disaster and emergency response plans starting January 1, 2028. The plans must identify mitigation measures (equipment, actions, and policies to reduce wildfire impacts on water supply), steps to prepare (identify critical infrastructure, coordinate with local emergency responders, and assess resilience and backup power options), actions to respond (including tank preparation during red-flag warnings and customer communications), and recovery steps (damage assessments and long-term adaptation). Suppliers must share these plans with the county Office of Emergency Services, while certain sensitive infrastructure information can be kept confidential. The bill also clarifies that water systems are not designed as wildfire suppression systems, that loss of water supply or pressure during a wildfire is not by itself a primary legal cause of wildfire damages, and it does not impose a duty to design systems for firefighting; negligent operation remains actionable. (The measure includes legislative findings about protecting sensitive operational information and may make violations a misdemeanor for covered suppliers.)"
+            ),   
         TipSheet(
             "California Assembly Unanimously Passes Water District Board Compensation Bill",
             ["Housing", "Finance", "Taxations", "Judiciary", "Utilities", "Water"],
@@ -192,7 +207,7 @@ combined_text = ["Represent this sentence for searching relevant passages: "+ f"
 combined_emb = model.encode(combined_text)
 
 
-query_idx = 0
+query_idx = 15
 
 summary_scores = summary_embs[query_idx] @ summary_embs.T
 title_scores = title_embs[query_idx] @ title_embs.T
@@ -203,10 +218,19 @@ tag_scores = numpy.array(
 
 print("COMPARING\n" + tipsheets[query_idx].title + "\n--------------------------")
 
-final = (0.55 * summary_scores) + (0.05 * title_scores) + (0.15 * tag_scores) + (0.25 * combined_scores)
+sum_rate = 0.65
+title_rate = 0.05
+tag_rate = 0.2
+com_rate = 0.1
 
+print(f"sum: {sum_rate}, title: {title_rate}, tag: {tag_rate}, combined: {com_rate}")
+final = (sum_rate * summary_scores) + (title_rate * title_scores) + (tag_rate * tag_scores) + (com_rate * combined_scores)
+
+# print(final[1], tipsheets[1].title)
+# print(final[2], tipsheets[2].title)
+# print(final[11], tipsheets[11].title)
 for i in range(len(final)):
-    if 0.95 > final[i] > 0.7:
-        print('\t', final[i], tipsheets[i].title)
+    if 0.95 > final[i] > 0.55:
+        print(i, ":* ", final[i], tipsheets[i].title)
     else:
-        print(final[i], tipsheets[i].title)
+        print(i, ": ", final[i], tipsheets[i].title)
