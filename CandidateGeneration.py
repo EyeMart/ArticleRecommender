@@ -207,7 +207,7 @@ combined_text = ["Represent this sentence for searching relevant passages: "+ f"
 combined_emb = model.encode(combined_text)
 
 
-query_idx = 15
+query_idx = 26
 
 summary_scores = summary_embs[query_idx] @ summary_embs.T
 title_scores = title_embs[query_idx] @ title_embs.T
