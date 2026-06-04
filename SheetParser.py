@@ -1,11 +1,13 @@
 import json
 
-def readTipSheet():
+def readTipSheets():
     data = open("data_clean.txt", "r")
     sheets = []
 
-    for _ in range(100):
+    while True:
         info = data.readline()
+        if info == "":
+            break
         sheets.append(json.loads(info))
         
     data.close()
