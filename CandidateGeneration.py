@@ -1,43 +1,105 @@
+import re
+import numpy
 from sentence_transformers import SentenceTransformer, SimilarityFunction
+from SheetParser import readTipSheets   
 
-# 1. Load a pretrained Sentence Transformer model
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", similarity_fn_name=SimilarityFunction.COSINE)
+LOW_VALUE_PHRASES = [
+    r"\bcalifornia\b",
+    r"\bassembly\b",
+    r"\bbill\b",
+    r"\bcommittee\b",
+    r"\bpasses\b",
+    r"\badvances\b",
+    r"\bapproves\b",
+    r"\bappropriations\b",
+    r"\bunanimously\b",
+    r"\bdiscussed by\b",
+    r"\bbipartisan\b",
+    r"\bsenate\b",
+    r"\bsenator\b",
+    r"\bsen.\b"
+]
+def cleanText(text: str) -> str:
+    text = text.lower()
 
-# The sentences to encode
-# descriptions = [
-#     "AB 1920 makes a small but important change to the California College Promise fee-waiver rules: currently, students who have previously earned any degree or certificate from a postsecondary school are barred from getting the fee waiver. This bill says that a certificate earned as part of a course sequence that leads to an associate degree should not count as a disqualifying certificate. In plain terms, if a student earned a short certificate while working toward an associate degree, that certificate will no longer make them ineligible for the College Promise fee waiver (which otherwise covers up to two academic years for full‑time first‑time or returning students who file a FAFSA or Dream Act application).",
-#     "This bill allows College of the Siskiyous to exempt certain nearby Oregon residents from paying the community college nonresident tuition fee. Specifically, students who have lived for more than one year in Jackson, Josephine, or Klamath counties (Oregon) and attend College of the Siskiyous could qualify for the exemption, subject to rules the Siskiyou Joint Community College District must adopt for proving residency and for appeals. The exemption is limited to at most 200 students per academic year. The bill also includes a legislative finding that a special law is needed for this college and states there is no required state reimbursement to local agencies for costs." 
-#     "AB 2771 tightens oversight of private postsecondary schools in California and strengthens protections for students. It updates how the state Bureau for Private Postsecondary Education oversees out‑of‑state and unaccredited schools—giving the bureau power to request information after a complaint or report to decide whether a school’s registration should be revoked or limited, requiring approval before opening additional branches (no matter the distance), and tightening rules for provisional approvals (for example, limiting students on visas to no more than 25% of any provisionally approved degree program and moving from automatic “suspension” to automatic termination if requirements aren’t met). The bill narrows who can claim exemptions (trade/fraternal exemptions are only for nondegree programs, and merely adding religious wording to otherwise secular programs won’t create a religious exemption), creates a formal process and limits for getting an exemption verified, and removes some recordkeeping exceptions for accredited schools. It also strengthens consumer disclosures and enrollment agreement rules, expands who can get relief from the Student Tuition Recovery Fund and what evidence the bureau may consider when deciding claims, and allows the fund to be used for claims administration and student-assistance staff. Finally, it extends the law’s operation to January 1, 2031 and increases penalties for unapproved operations—all intended to improve transparency, accountability, and student protections.",
-#     "AB 2038 strengthens protections for homeowners after disaster-related total losses and after wildfires. It requires insurers to continue offering to renew a residential property policy for at least three yearly renewals (and for at least 36 months from the date of a total loss) when a home was destroyed by a disaster and rebuilding isn’t finished, and it extends the ban on canceling or refusing to renew policies for properties in ZIP codes within or next to a wildfire perimeter from one year to two years after a state of emergency. The law still lets insurers adjust coverages and premiums after consulting the homeowner, and it allows cancellations or nonrenewals in cases like willful or grossly negligent acts, subsequent unrelated losses, or physical changes that make the property uninsurable. The Department of Forestry and Fire Protection provides the fire perimeter data and the Insurance Commissioner tells insurers which ZIP codes are covered.",
-#     "This bill directs the Instructional Quality Commission, when it next updates the Health Framework for California Public Schools, to consider adding and recommend to the State Board specific sexual-health instructional content about dating abuse and technology-facilitated violence. Suggested topics include digital and online safety (such as nonconsensual intimate images, deepfakes, online grooming, sextortion, stalking, and misuse of generative AI), age-appropriate information on legal rights and where to get help (like restraining orders and contacting trusted adults, school staff, or community services), and lessons that are inclusive of and responsive to LGBTQIA+ and gender-diverse students who face higher risks.",
-#     "This bill restructures how California’s K–12 education system is governed to create clearer accountability and coordination. It creates a new, Governor‑appointed Education Commissioner (subject to Senate confirmation) who will hold the Department of Education’s executive and administrative authority and carry out State Board of Education policy, replacing the Superintendent’s role as the department’s director. The Superintendent of Public Instruction is kept as an elected official but is redefined as the head of a separate Office of the Superintendent whose job is to serve as an independent evaluator and cross‑sector coordinator—tracking student outcomes from preschool through higher education and conducting independent reviews of large or important education initiatives. The measure also moves the Superintendent onto the State Board of Education and the Community Colleges Board of Governors, changes how some State Board members are appointed (giving two appointments each to the Senate pro Tempore and Assembly Speaker), transfers certain employees and deputies between offices, and requires the new Education Commissioner to deliver a transition plan by mid‑2027. It bans outside employment for both the Superintendent and the Education Commissioner and requires any Department philanthropic foundations to be dissolved by mid‑2028. Many of the reorganizational changes take effect in 2027.",
-#     "AB 1999 updates California’s Veterinary Medicine Practice Act to clarify how vets may use telemedicine, tighten rules around prescriptions and veterinary oversight, and create new ways for veterinarians to serve animal shelters. The bill says animal owners may no longer perform surgical or dental operations on their own animals (it still allows simple procedures like injections, microchipping, castration of livestock, ear tags, or venipuncture). It defines telemedicine, teletriage, and teleconsultation, allows an unlicensed specialist to provide teleconsultation to a California-licensed veterinarian, and requires veterinarians to get informed consent and follow privacy and recordkeeping rules when using telemedicine. It sets time limits on how long a veterinarian-client-patient relationship lasts (one year after an in-person visit or premises visit, six months after a live video exam), restricts antimicrobial and controlled-substance prescribing via telemedicine, and lets another veterinarian provide limited emergency refills in certain situations. The bill also creates a shelter veterinarian license and two “retired” statuses (one that allows retired volunteers to work only for shelters), with background checks, exams, continuing education, and fee rules, and it updates premises-registration and license-renewal procedures. Overall, the changes aim to balance animal health and public safety with modern telemedicine use and increased veterinary support for shelters.",
-#     "This bill lets California community college districts temporarily use local, unrestricted general fund money to keep campus student support services running when those services lose federal discretionary grant funding because of federal action on or after September 10, 2025 — without those local expenditures counting against the state calculation that normally requires districts to spend half their operating budget on classroom instructor salaries. The change lasts for up to five fiscal years after 2025–26 or until the specified federal funding is fully restored to every district (whichever comes first). Districts must annually certify their eligibility to the Chancellor’s Office, which will track and report the certifications. The bill caps the exclusion so it cannot exceed the amount of the lost federal grants, forbids using the rule to cut instructional staffing or quality or to create or raise pay for administrators, and preserves faculty hiring and workload rules. It is enacted as an urgency measure to take effect immediately.",
-#     "SB 1006 changes how the Cal Grant B \"access\" award (the part of the grant that helps with living and other non‑tuition costs like housing, food, transportation, books) is set. Beginning with the 2027–28 award year, the bill requires that the minimum per‑student access award be set at the same maximum amount that was provided in the 2025–26 award year, and that this amount be increased each year by the percentage change in the California Consumer Price Index for All Urban Consumers (so the award keeps pace with inflation). The Student Aid Commission must calculate and certify the CPI change using the two most recent June indices by specified dates; if the CPI falls, the award will not be reduced. The award level may still be adjusted in the annual Budget Act, and students eligible under certain other Cal Grant rules may receive different specified amounts.",
-# ]
+    for phrase in LOW_VALUE_PHRASES:
+        text = re.sub(phrase, "", text)
 
-# should be in this order.
-# titles = ["California Assembly Approves Temporary Funding Flexibility for Community Colleges",
-#           "California Assembly Approves Tuition Exemption for Oregon Students at College of the Siskiyous",
-#           "Senate Appropriations to Review Cal Grant B Inflation Adjustment Bill",
-#           "California Assembly Passes Bill to Restructure K-12 Education Governance",
-#           "California Assembly Committee to Discuss Tech-Based Student Learning Initiative",
-#           "Assembly Appropriations Committee to Address Campus Sexual Harassment Tech Laws",
-#           "Big Dog Stuck In Tree Saved By Fireman"] 
+    text = re.sub(r"\s+", " ", text).strip()
 
-titles = ["California Assembly Approves Temporary Funding Flexibility for Community Colleges",
-          "California Assembly Approves Tuition Exemption for Oregon Students at College of the Siskiyous",
-          "Senate Appropriations to Review Cal Grant B Inflation Adjustment Bill",
-          "California Assembly Passes Bill to Restructure K-12 Education Governance",
-          "California Assembly Committee to Discuss Tech-Based Student Learning Initiative",
-          "Assembly Appropriations Committee to Address Campus Sexual Harassment Tech Laws",
-          "Big Dog Stuck In Tree Saved By Fireman"] 
+    return text
 
-# 2. Calculate embeddings by calling model.encode()
-embeddings = model.encode(titles)
-# [3, 384]
+def jaccard(a, b):
+    a = set(a)
+    b = set(b)
+    if not a and not b:
+        return 0.0
 
-# # Compute cosine similarities
-similarities = model.similarity(embeddings, embeddings)
-print(similarities)
+    return len(a & b) / len(a | b)
 
+def getRecommendations(queryIdx):
+    tipsheets = readTipSheets()
+    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", similarity_fn_name=SimilarityFunction.EUCLIDEAN)
+
+    titles = [t["title"] for t in tipsheets]
+    tags = [
+        [tag["tagname"] for tag in t["raw_tile_json"]["tags"]]
+        for t in tipsheets
+    ]
+    ids = [t["tipsheet_json_id"] for t in tipsheets]
+    cleanTitles = [cleanText(t) for t in titles]
+    sumAnalysis = [f"{t["summary"]}" for t in tipsheets]
+
+    titlesEmb = model.encode(titles)
+    cleanTitlesEmb = model.encode(cleanTitles)
+
+    sumEmb = model.encode(sumAnalysis)
+
+    titleScores = titlesEmb[queryIdx] @ titlesEmb.T
+    cleanTitleScores = cleanTitlesEmb[queryIdx] @ cleanTitlesEmb.T
+
+    sumScores = sumEmb[queryIdx] @ sumEmb.T
+    tagScores = numpy.array(
+        [
+            jaccard(
+                tags[queryIdx],
+                tags[i]
+            )
+            for i in range(len(tipsheets))
+        ]
+    )
+    print("COMPARING\n" + ids[queryIdx] + " -- " + titles[queryIdx] + "\n--------------------------")
+
+    finalScore = (
+        cleanTitleScores * 0.5 +
+        sumScores * 0.5
+    )
+
+    filteredCandidates = numpy.where(
+        (tagScores >= 0.25) 
+    )[0]
+
+    filteredCandidates = filteredCandidates[filteredCandidates != queryIdx]
+
+
+    filterdFinalScores = finalScore[filteredCandidates]
+
+    bestScores = numpy.argsort(filterdFinalScores)[::-1][:5]
+
+    for recommendationIdx in bestScores:
+        recommendationIdx = int(recommendationIdx)
+        idx = int(filteredCandidates[recommendationIdx])
+        score = float(filterdFinalScores[recommendationIdx])
+        if score < 0.55:
+            break
+
+        print(
+            round(score, 3),
+            titleScores[idx],
+            cleanTitleScores[idx],
+            sumScores[idx],
+            ids[idx],
+            titles[idx]
+        )
+
+getRecommendations(104)
