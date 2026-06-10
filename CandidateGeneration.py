@@ -101,3 +101,5 @@ def getRecommendations(queryIdx):
             ids[idx],
             titles[idx]
         )
+
+getRecommendations(104)
