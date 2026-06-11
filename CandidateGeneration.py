@@ -1,5 +1,6 @@
 import re
 import numpy
+import os
 from sentence_transformers import SentenceTransformer, SimilarityFunction
 from SheetParser import readTipSheets   
 
@@ -37,28 +38,53 @@ def jaccard(a, b):
 
     return len(a & b) / len(a | b)
 
+def createEmbeddings(titles, sumAnalysis):
+
+  if os.path.exists("title_emb.txt") and os.path.getsize("title_emb.txt") > 0:
+      cleanTitlesEmb = numpy.loadtxt("title_emb.txt")
+  else:
+      cleanTitlesEmb = numpy.empty((0, 384))
+
+  if os.path.exists("sum_emb.txt") and os.path.getsize("sum_emb.txt") > 0:
+      sumEmb = numpy.loadtxt("sum_emb.txt")
+  else:
+      sumEmb = numpy.empty((0, 384))
+
+  cleanTitlesEmb = numpy.atleast_2d(cleanTitlesEmb)
+  sumEmb = numpy.atleast_2d(sumEmb)
+
+
+  if len(cleanTitlesEmb) < len(titles) or len(sumEmb) < len(sumAnalysis):
+      model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+      cleanTitles = [cleanText(t) for t in titles[len(cleanTitlesEmb):]]
+      newTitleEmb = model.encode(cleanTitles)
+
+      cleanTitlesEmb = numpy.vstack([cleanTitlesEmb, newTitleEmb])
+      numpy.savetxt("title_emb.txt", cleanTitlesEmb)
+
+      newSumEmb = model.encode(sumAnalysis[len(sumEmb):])
+
+      sumEmb = numpy.vstack([sumEmb, newSumEmb])
+      numpy.savetxt("sum_emb.txt", sumEmb)
+
+  return cleanTitlesEmb, sumEmb
+
 def getRecommendations(queryIdx):
     tipsheets = readTipSheets()
-    model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", similarity_fn_name=SimilarityFunction.EUCLIDEAN)
-
+    ids = [t["tipsheet_json_id"] for t in tipsheets]
     titles = [t["title"] for t in tipsheets]
     tags = [
         [tag["tagname"] for tag in t["raw_tile_json"]["tags"]]
         for t in tipsheets
     ]
-    ids = [t["tipsheet_json_id"] for t in tipsheets]
-    cleanTitles = [cleanText(t) for t in titles]
     sumAnalysis = [f"{t["summary"]}" for t in tipsheets]
 
-    titlesEmb = model.encode(titles)
-    cleanTitlesEmb = model.encode(cleanTitles)
+    cleanTitlesEmb, sumEmb = createEmbeddings(titles, sumAnalysis)
 
-    sumEmb = model.encode(sumAnalysis)
-
-    titleScores = titlesEmb[queryIdx] @ titlesEmb.T
     cleanTitleScores = cleanTitlesEmb[queryIdx] @ cleanTitlesEmb.T
-
     sumScores = sumEmb[queryIdx] @ sumEmb.T
+
     tagScores = numpy.array(
         [
             jaccard(
@@ -90,16 +116,17 @@ def getRecommendations(queryIdx):
         recommendationIdx = int(recommendationIdx)
         idx = int(filteredCandidates[recommendationIdx])
         score = float(filterdFinalScores[recommendationIdx])
-        if score < 0.55:
-            break
+        # if score < 0.55:
+        #     break
 
         print(
             round(score, 3),
-            titleScores[idx],
             cleanTitleScores[idx],
             sumScores[idx],
             ids[idx],
             titles[idx]
         )
 
-getRecommendations(104)
+# getRecommendations(225)
+
+getRecommendations(100)
