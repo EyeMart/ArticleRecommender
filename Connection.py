@@ -5,19 +5,15 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
-import json
 
+'''
+returns records to easily manipluate data
+'''
 def buildRecords(row):
     (
-        tip_id,
-        tile_date,
         tile_title,
-        tile_bill_num,
-        tile_committee,
-        state,
         json_id,
         tipsheet_tile_json,
-        tipsheet_type
     ) = row
 
     tileData = json.loads(tipsheet_tile_json) if tipsheet_tile_json else {}
@@ -27,7 +23,6 @@ def buildRecords(row):
     for tag in tileData.get("cmtags", []):
         tags.append(tag)
 
-    triggerTexts = tileData.get("trigger_texts", [])
 
     content = []
     for item in tileData.get("content", []):
@@ -35,33 +30,14 @@ def buildRecords(row):
         if text:
             content.append(text)
 
-    personas_text = []
-    for person in tileData.get("personas", []):
-        name = f"{person.get('first', '')} {person.get('last', '')}".strip()
-        info = person.get("info", "")
-        note = person.get("note", "")
-        affiliation = person.get("affiliation", "")
-
-        personas_text.append(
-            f"{name}. {info}. {note}. Affiliation: {affiliation}"
-        )
-
+    
     analysis = tileData.get("billanalysis_text", "")
 
     return {
-        "id": tip_id,
         "tipsheet_json_id": json_id,
         "title": tile_title,
-        "state": state,
-        "bill": tile_bill_num,
-        "committee": tile_committee,
-        "date": str(tile_date),
         "tags" : tags,
-        "tipsheet_type": tipsheet_type,
-        "score": tileData.get("score"),
-        "trigger_texts": " ".join(triggerTexts),
         "summary": " ".join(content),
-        "people": " ".join(personas_text),
         "analysis": analysis,
         "raw_tile_json": tileData,
     }
@@ -81,8 +57,8 @@ connection = pymysql.connect(
 )
 
 sql2 = """
-SELECT tip_id, tile_date, tile_title, tile_bill_num, tile_committee, state, tipsheet_json_id, tipsheet_tile_json, tipsheet_type FROM Tipsheets
-LIMIT 800;
+SELECT tile_title, tipsheet_json_id, tipsheet_tile_json FROM Tipsheets
+LIMIT 1400;
 """
 
 data = open("data_clean.txt", "w")
