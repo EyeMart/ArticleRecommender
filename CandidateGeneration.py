@@ -1,9 +1,22 @@
 import re
 import numpy
 import os
-from sentence_transformers import SentenceTransformer, SimilarityFunction
-from SheetParser import readTipSheets   
+from sentence_transformers import SentenceTransformer
 
+def readTipSheets():
+    data = open("data_clean.txt", "r")
+    sheets = []
+
+    while True:
+        info = data.readline()
+        if info == "":
+            break
+        sheets.append(json.loads(info))
+        
+    data.close()
+    return sheets 
+
+# phrases that will be removed in texts
 LOW_VALUE_PHRASES = [
     r"\bcalifornia\b",
     r"\bassembly\b",
@@ -20,7 +33,9 @@ LOW_VALUE_PHRASES = [
     r"\bsenator\b",
     r"\bsen.\b"
 ]
-def cleanText(text: str) -> str:
+
+''' removes repeated phrases in a text to avoid overcounting similarity'''
+def cleanText(text):
     text = text.lower()
 
     for phrase in LOW_VALUE_PHRASES:
@@ -30,6 +45,10 @@ def cleanText(text: str) -> str:
 
     return text
 
+
+'''
+Gets the similarity of a set of tags 
+'''
 def jaccard(a, b):
     a = set(a)
     b = set(b)
@@ -38,6 +57,9 @@ def jaccard(a, b):
 
     return len(a & b) / len(a | b)
 
+'''
+Returns saved embeddings or creates new ones
+'''
 def createEmbeddings(titles, sumAnalysis):
 
   if os.path.exists("title_emb.txt") and os.path.getsize("title_emb.txt") > 0:
@@ -71,6 +93,7 @@ def createEmbeddings(titles, sumAnalysis):
   return cleanTitlesEmb, sumEmb
 
 def getRecommendations(queryIdx):
+    # extracts tipsheet data
     tipsheets = readTipSheets()
     ids = [t["tipsheet_json_id"] for t in tipsheets]
     titles = [t["title"] for t in tipsheets]
@@ -82,9 +105,9 @@ def getRecommendations(queryIdx):
 
     cleanTitlesEmb, sumEmb = createEmbeddings(titles, sumAnalysis)
 
+    # generate similarity scores
     cleanTitleScores = cleanTitlesEmb[queryIdx] @ cleanTitlesEmb.T
     sumScores = sumEmb[queryIdx] @ sumEmb.T
-
     tagScores = numpy.array(
         [
             jaccard(
@@ -94,6 +117,8 @@ def getRecommendations(queryIdx):
             for i in range(len(tipsheets))
         ]
     )
+
+    # original tipsheet's title and id
     print("COMPARING\n" + ids[queryIdx] + " -- " + titles[queryIdx] + "\n--------------------------")
 
     finalScore = (
@@ -101,21 +126,25 @@ def getRecommendations(queryIdx):
         sumScores * 0.5
     )
 
+    # removes any tipsheets that are not remotely related
     filteredCandidates = numpy.where(
         (tagScores >= 0.25) 
     )[0]
 
+    # gets the candidate's final score not including the orginal tipsheet
     filteredCandidates = filteredCandidates[filteredCandidates != queryIdx]
-
-
     filterdFinalScores = finalScore[filteredCandidates]
 
+    # get the top 5 scores
     bestScores = numpy.argsort(filterdFinalScores)[::-1][:5]
 
+    # list recommendations
     for recommendationIdx in bestScores:
         recommendationIdx = int(recommendationIdx)
         idx = int(filteredCandidates[recommendationIdx])
         score = float(filterdFinalScores[recommendationIdx])
+
+        # often bad recommendations under 55% similarity
         # if score < 0.55:
         #     break
 
@@ -127,6 +156,5 @@ def getRecommendations(queryIdx):
             titles[idx]
         )
 
-# getRecommendations(225)
+getRecommendations(225)
 
-getRecommendations(100)
